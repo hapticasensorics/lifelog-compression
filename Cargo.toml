@@ -4,6 +4,12 @@ version = "0.1.0"
 edition = "2024"
 description = "Opinionated sparse visual extraction for lifelog-style video"
 license = "MIT"
+readme = "README.md"
+repository = "https://github.com/hapticasensorics/lifelog-compression"
+homepage = "https://github.com/hapticasensorics/lifelog-compression"
+documentation = "https://github.com/hapticasensorics/lifelog-compression"
+keywords = ["video", "lifelog", "jpeg", "avfoundation", "macos"]
+categories = ["multimedia::video", "command-line-utilities"]
 
 [lib]
 name = "lifelog_compression"
