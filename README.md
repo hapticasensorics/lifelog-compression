@@ -55,9 +55,10 @@ Library entry points:
 
 Each bundle also keeps raw source metadata artifacts alongside the extracted frames:
 
-- `source-ffprobe.json`
-- `source-mdls.txt`
-- `source-xattrs.txt`
+- `metadata/source-metadata.json`
+- `metadata/source-probe.json`
+- `metadata/source-mdls.txt`
+- `metadata/source-xattrs.txt`
 
 ## Main findings
 

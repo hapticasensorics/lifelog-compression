@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2 - 2026-03-30
+
+Metadata layout standardization release.
+
+Highlights:
+
+- standardize bundle metadata storage under `metadata/`
+- add common `metadata/source-metadata.json` across video bundles
+- rename the raw probe artifact to `metadata/source-probe.json`
+- keep `metadata/source-mdls.txt` and `metadata/source-xattrs.txt`
+
 ## 0.1.1 - 2026-03-30
 
 Metadata preservation patch release.
@@ -7,9 +18,10 @@ Metadata preservation patch release.
 Highlights:
 
 - keep raw source metadata artifacts in each visual bundle:
-  - `source-ffprobe.json`
-  - `source-mdls.txt`
-  - `source-xattrs.txt`
+  - `metadata/source-metadata.json`
+  - `metadata/source-probe.json`
+  - `metadata/source-mdls.txt`
+  - `metadata/source-xattrs.txt`
 - expose the metadata artifact paths in `bundle.json`
 - update CLI/docs to make metadata preservation explicit
 

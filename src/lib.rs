@@ -127,9 +127,21 @@ pub struct BundleMetadata {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MetadataArtifacts {
-    pub ffprobe_relpath: String,
+    pub source_metadata_relpath: String,
+    pub raw_probe_relpath: String,
+    pub raw_probe_kind: String,
     pub mdls_relpath: String,
     pub xattrs_relpath: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SourceMetadataEnvelope {
+    pub format: String,
+    pub format_version: u32,
+    pub source_kind: String,
+    pub source_relpath: String,
+    pub file_size_bytes: u64,
+    pub summary: SourceVideoMetadata,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -215,6 +227,9 @@ fn run_command_allow_failure(program: &str, args: &[&str]) -> Result<Vec<u8>, St
 }
 
 fn write_source_metadata_artifacts(input: &Path, output_dir: &Path) -> Result<MetadataArtifacts, String> {
+    let metadata_dir = output_dir.join("metadata");
+    fs::create_dir_all(&metadata_dir)
+        .map_err(|err| format!("failed to create {}: {err}", metadata_dir.display()))?;
     let input_str = input
         .to_str()
         .ok_or_else(|| format!("non-utf8 input path: {}", input.display()))?;
@@ -233,21 +248,23 @@ fn write_source_metadata_artifacts(input: &Path, output_dir: &Path) -> Result<Me
             input_str,
         ],
     )?;
-    fs::write(output_dir.join("source-ffprobe.json"), ffprobe_json)
+    fs::write(metadata_dir.join("source-probe.json"), ffprobe_json)
         .map_err(|err| format!("failed to write ffprobe metadata: {err}"))?;
 
     let mdls_text = run_command("mdls", &[input_str])?;
-    fs::write(output_dir.join("source-mdls.txt"), mdls_text)
+    fs::write(metadata_dir.join("source-mdls.txt"), mdls_text)
         .map_err(|err| format!("failed to write mdls metadata: {err}"))?;
 
     let xattrs_text = run_command_allow_failure("xattr", &["-l", input_str])?;
-    fs::write(output_dir.join("source-xattrs.txt"), xattrs_text)
+    fs::write(metadata_dir.join("source-xattrs.txt"), xattrs_text)
         .map_err(|err| format!("failed to write xattr metadata: {err}"))?;
 
     Ok(MetadataArtifacts {
-        ffprobe_relpath: "source-ffprobe.json".to_string(),
-        mdls_relpath: "source-mdls.txt".to_string(),
-        xattrs_relpath: "source-xattrs.txt".to_string(),
+        source_metadata_relpath: "metadata/source-metadata.json".to_string(),
+        raw_probe_relpath: "metadata/source-probe.json".to_string(),
+        raw_probe_kind: "ffprobe".to_string(),
+        mdls_relpath: "metadata/source-mdls.txt".to_string(),
+        xattrs_relpath: "metadata/source-xattrs.txt".to_string(),
     })
 }
 
@@ -412,6 +429,22 @@ pub fn extract(request: &ExtractRequest) -> Result<ExtractResult, String> {
         timecode: native.source_video.timecode,
         has_audio: native.source_video.has_audio,
     };
+    let source_metadata = SourceMetadataEnvelope {
+        format: "source-metadata".to_string(),
+        format_version: 1,
+        source_kind: "video".to_string(),
+        source_relpath: source.source_relpath.clone(),
+        file_size_bytes: source.file_size_bytes,
+        summary: source.clone(),
+    };
+    let mut source_metadata_file =
+        File::create(request.output_dir.join(&metadata_artifacts.source_metadata_relpath))
+            .map_err(|err| format!("failed to create source metadata artifact: {err}"))?;
+    serde_json::to_writer_pretty(&mut source_metadata_file, &source_metadata)
+        .map_err(|err| format!("failed to write source metadata artifact: {err}"))?;
+    source_metadata_file
+        .write_all(b"\n")
+        .map_err(|err| format!("failed to finalize source metadata artifact: {err}"))?;
 
     let (content_rect_x, content_rect_y, content_rect_width, content_rect_height) = content_rect(
         source.width,
@@ -676,9 +709,11 @@ mod tests {
                 has_audio: true,
             },
             metadata_artifacts: MetadataArtifacts {
-                ffprobe_relpath: "source-ffprobe.json".to_string(),
-                mdls_relpath: "source-mdls.txt".to_string(),
-                xattrs_relpath: "source-xattrs.txt".to_string(),
+                source_metadata_relpath: "metadata/source-metadata.json".to_string(),
+                raw_probe_relpath: "metadata/source-probe.json".to_string(),
+                raw_probe_kind: "ffprobe".to_string(),
+                mdls_relpath: "metadata/source-mdls.txt".to_string(),
+                xattrs_relpath: "metadata/source-xattrs.txt".to_string(),
             },
         };
         fs::write(
