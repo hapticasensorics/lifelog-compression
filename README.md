@@ -53,6 +53,12 @@ Library entry points:
 - `load_bundle_metadata(bundle_dir)`
 - `load_manifest(bundle_dir)`
 
+Each bundle also keeps raw source metadata artifacts alongside the extracted frames:
+
+- `source-ffprobe.json`
+- `source-mdls.txt`
+- `source-xattrs.txt`
+
 ## Main findings
 
 ### 1. Sparse image extraction beats low-fps video transcoding

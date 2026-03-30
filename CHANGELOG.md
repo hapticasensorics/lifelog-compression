@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.1 - 2026-03-30
+
+Metadata preservation patch release.
+
+Highlights:
+
+- keep raw source metadata artifacts in each visual bundle:
+  - `source-ffprobe.json`
+  - `source-mdls.txt`
+  - `source-xattrs.txt`
+- expose the metadata artifact paths in `bundle.json`
+- update CLI/docs to make metadata preservation explicit
+
 ## 0.1.0 - 2026-03-30
 
 Initial public release.

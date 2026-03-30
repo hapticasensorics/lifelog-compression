@@ -14,7 +14,7 @@ Commands:
       - 1 fps
       - padded 1920x1080 JPEG
       - +/- 0.5s tolerance
-      - preserve intrinsic source-video metadata
+      - preserve intrinsic source-video metadata and raw metadata artifacts
       - one input video -> one output bundle
 
   batch <input-dir> <output-root>
@@ -39,7 +39,7 @@ fn print_spec() {
 - canonical canvas: padded {w}x{h}
 - cadence: {fps_num}/{fps_den} fps
 - timestamp tolerance: -{tb}ms / +{ta}ms
-- preserve intrinsic source-video metadata
+- preserve intrinsic source-video metadata and raw source metadata artifacts
 - one input video -> one bundle -> one upload unit
 - optional packaging: single tar archive of the bundle
 

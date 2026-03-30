@@ -122,6 +122,14 @@ pub struct BundleMetadata {
     pub sampling: SamplingMetadata,
     pub image: ImageMetadata,
     pub source_video: SourceVideoMetadata,
+    pub metadata_artifacts: MetadataArtifacts,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MetadataArtifacts {
+    pub ffprobe_relpath: String,
+    pub mdls_relpath: String,
+    pub xattrs_relpath: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -184,6 +192,63 @@ fn bundle_id() -> Result<(String, u128), String> {
         .map_err(|err| format!("system clock before unix epoch: {err}"))?;
     let millis = now.as_millis();
     Ok((format!("vb_{millis:x}"), millis))
+}
+
+fn run_command(program: &str, args: &[&str]) -> Result<Vec<u8>, String> {
+    let output = Command::new(program)
+        .args(args)
+        .output()
+        .map_err(|err| format!("failed to run `{program}`: {err}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("`{program}` failed: {stderr}"));
+    }
+    Ok(output.stdout)
+}
+
+fn run_command_allow_failure(program: &str, args: &[&str]) -> Result<Vec<u8>, String> {
+    let output = Command::new(program)
+        .args(args)
+        .output()
+        .map_err(|err| format!("failed to run `{program}`: {err}"))?;
+    Ok(output.stdout)
+}
+
+fn write_source_metadata_artifacts(input: &Path, output_dir: &Path) -> Result<MetadataArtifacts, String> {
+    let input_str = input
+        .to_str()
+        .ok_or_else(|| format!("non-utf8 input path: {}", input.display()))?;
+
+    let ffprobe_json = run_command(
+        "ffprobe",
+        &[
+            "-v",
+            "error",
+            "-show_format",
+            "-show_streams",
+            "-show_chapters",
+            "-show_programs",
+            "-print_format",
+            "json",
+            input_str,
+        ],
+    )?;
+    fs::write(output_dir.join("source-ffprobe.json"), ffprobe_json)
+        .map_err(|err| format!("failed to write ffprobe metadata: {err}"))?;
+
+    let mdls_text = run_command("mdls", &[input_str])?;
+    fs::write(output_dir.join("source-mdls.txt"), mdls_text)
+        .map_err(|err| format!("failed to write mdls metadata: {err}"))?;
+
+    let xattrs_text = run_command_allow_failure("xattr", &["-l", input_str])?;
+    fs::write(output_dir.join("source-xattrs.txt"), xattrs_text)
+        .map_err(|err| format!("failed to write xattr metadata: {err}"))?;
+
+    Ok(MetadataArtifacts {
+        ffprobe_relpath: "source-ffprobe.json".to_string(),
+        mdls_relpath: "source-mdls.txt".to_string(),
+        xattrs_relpath: "source-xattrs.txt".to_string(),
+    })
 }
 
 fn content_rect(
@@ -329,6 +394,7 @@ pub fn extract(request: &ExtractRequest) -> Result<ExtractResult, String> {
         .map_err(|err| format!("failed to create {}: {err}", request.output_dir.display()))?;
 
     let native = run_native_extract(request, &defaults)?;
+    let metadata_artifacts = write_source_metadata_artifacts(&request.input, &request.output_dir)?;
     let source = SourceVideoMetadata {
         source_relpath: request.input.to_string_lossy().to_string(),
         file_size_bytes: native.source_video.file_size_bytes,
@@ -411,6 +477,7 @@ pub fn extract(request: &ExtractRequest) -> Result<ExtractResult, String> {
             padding: "black".to_string(),
         },
         source_video: source,
+        metadata_artifacts,
     };
 
     let bundle_path = request.output_dir.join("bundle.json");
@@ -541,7 +608,7 @@ pub fn extract_directory_to_dir(
 
 #[cfg(test)]
 mod tests {
-    use super::{BundleMetadata, ImageMetadata, ManifestRow, ProducerMetadata, SamplingMetadata, SourceVideoMetadata, bundle_dir_for_input, content_rect, is_supported_video_file, load_bundle_metadata, load_manifest};
+    use super::{BundleMetadata, ImageMetadata, ManifestRow, MetadataArtifacts, ProducerMetadata, SamplingMetadata, SourceVideoMetadata, bundle_dir_for_input, content_rect, is_supported_video_file, load_bundle_metadata, load_manifest};
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -607,6 +674,11 @@ mod tests {
                 creation_time: None,
                 timecode: None,
                 has_audio: true,
+            },
+            metadata_artifacts: MetadataArtifacts {
+                ffprobe_relpath: "source-ffprobe.json".to_string(),
+                mdls_relpath: "source-mdls.txt".to_string(),
+                xattrs_relpath: "source-xattrs.txt".to_string(),
             },
         };
         fs::write(
