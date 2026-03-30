@@ -56,6 +56,21 @@ pub struct ExtractResult {
     pub frame_count: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchItemResult {
+    pub input: PathBuf,
+    pub bundle_dir: PathBuf,
+    pub frame_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchExtractResult {
+    pub output_root: PathBuf,
+    pub item_count: usize,
+    pub total_frame_count: usize,
+    pub items: Vec<BatchItemResult>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProducerMetadata {
     pub name: String,
@@ -439,10 +454,96 @@ pub fn load_manifest(bundle_dir: impl AsRef<Path>) -> Result<Vec<ManifestRow>, S
         .collect()
 }
 
+fn is_supported_video_file(path: &Path) -> bool {
+    let Some(ext) = path.extension().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    matches!(
+        &ext.to_ascii_lowercase()[..],
+        "mp4" | "mov" | "m4v" | "avi" | "mkv" | "mts" | "m2ts" | "lrv" | "mpg" | "mpeg"
+    )
+}
+
+fn collect_video_inputs(root: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    let entries = fs::read_dir(root)
+        .map_err(|err| format!("failed to read {}: {err}", root.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|err| format!("failed to read dir entry: {err}"))?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_video_inputs(&path, out)?;
+        } else if path.is_file() && is_supported_video_file(&path) {
+            out.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn bundle_dir_for_input(input_root: &Path, input: &Path, output_root: &Path) -> Result<PathBuf, String> {
+    let relative = input.strip_prefix(input_root).map_err(|err| {
+        format!(
+            "failed to compute relative path for {} under {}: {err}",
+            input.display(),
+            input_root.display()
+        )
+    })?;
+    let mut bundle_dir = output_root.join(relative);
+    bundle_dir.set_extension("");
+    Ok(bundle_dir)
+}
+
+pub fn extract_directory_to_dir(
+    input_root: impl AsRef<Path>,
+    output_root: impl AsRef<Path>,
+) -> Result<BatchExtractResult, String> {
+    let input_root = input_root.as_ref();
+    let output_root = output_root.as_ref();
+
+    if !input_root.exists() {
+        return Err(format!("input root does not exist: {}", input_root.display()));
+    }
+    if !input_root.is_dir() {
+        return Err(format!("input root is not a directory: {}", input_root.display()));
+    }
+
+    if output_root.exists() {
+        fs::remove_dir_all(output_root)
+            .map_err(|err| format!("failed to remove {}: {err}", output_root.display()))?;
+    }
+    fs::create_dir_all(output_root)
+        .map_err(|err| format!("failed to create {}: {err}", output_root.display()))?;
+
+    let mut inputs = Vec::new();
+    collect_video_inputs(input_root, &mut inputs)?;
+    inputs.sort();
+
+    let mut items = Vec::with_capacity(inputs.len());
+    let mut total_frame_count = 0;
+
+    for input in inputs {
+        let bundle_dir = bundle_dir_for_input(input_root, &input, output_root)?;
+        let result = extract_to_dir(&input, &bundle_dir)?;
+        total_frame_count += result.frame_count;
+        items.push(BatchItemResult {
+            input,
+            bundle_dir: result.bundle_dir,
+            frame_count: result.frame_count,
+        });
+    }
+
+    Ok(BatchExtractResult {
+        output_root: output_root.to_path_buf(),
+        item_count: items.len(),
+        total_frame_count,
+        items,
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{BundleMetadata, ImageMetadata, ManifestRow, ProducerMetadata, SamplingMetadata, SourceVideoMetadata, content_rect, load_bundle_metadata, load_manifest};
+    use super::{BundleMetadata, ImageMetadata, ManifestRow, ProducerMetadata, SamplingMetadata, SourceVideoMetadata, bundle_dir_for_input, content_rect, is_supported_video_file, load_bundle_metadata, load_manifest};
     use std::fs;
+    use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -552,5 +653,22 @@ mod tests {
         assert_eq!(loaded, vec![row]);
 
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn supports_common_video_extensions_case_insensitively() {
+        assert!(is_supported_video_file(Path::new("clip.MP4")));
+        assert!(is_supported_video_file(Path::new("clip.mov")));
+        assert!(is_supported_video_file(Path::new("clip.LRV")));
+        assert!(!is_supported_video_file(Path::new("clip.jpg")));
+    }
+
+    #[test]
+    fn batch_bundle_dir_preserves_relative_structure() {
+        let input_root = Path::new("/tmp/input");
+        let input = Path::new("/tmp/input/DCIM/Camera02/VID_001.MP4");
+        let output_root = Path::new("/tmp/output");
+        let bundle_dir = bundle_dir_for_input(input_root, input, output_root).unwrap();
+        assert_eq!(bundle_dir, Path::new("/tmp/output/DCIM/Camera02/VID_001"));
     }
 }

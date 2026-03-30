@@ -41,6 +41,7 @@ Commands:
 ```bash
 cargo run -- spec
 cargo run -- extract /path/to/video.mp4 /path/to/output-bundle
+cargo run -- batch /path/to/video-folder /path/to/output-root
 ```
 
 On macOS, the Rust crate compiles and invokes a tiny native Swift helper built on `AVAssetImageGenerator`. Rust owns the package shape and bundle emission; the native helper owns the actual frame extraction.
@@ -48,6 +49,7 @@ On macOS, the Rust crate compiles and invokes a tiny native Swift helper built o
 Library entry points:
 
 - `extract_to_dir(input, output_dir)`
+- `extract_directory_to_dir(input_root, output_root)`
 - `load_bundle_metadata(bundle_dir)`
 - `load_manifest(bundle_dir)`
 

@@ -1,4 +1,4 @@
-use lifelog_compression::{ExtractDefaults, ExtractRequest, extract};
+use lifelog_compression::{ExtractDefaults, ExtractRequest, extract, extract_directory_to_dir};
 use std::env;
 use std::path::PathBuf;
 
@@ -16,6 +16,10 @@ Commands:
       - +/- 0.5s tolerance
       - preserve intrinsic source-video metadata
       - one input video -> one output bundle
+
+  batch <input-dir> <output-root>
+    Recursively extract every supported video under a directory.
+    Output bundle folders mirror the relative input paths.
 
   spec
     Print the current bundle design summary.
@@ -72,6 +76,26 @@ fn main() {
             match extract(&request) {
                 Ok(result) => {
                     println!("{}", result.bundle_dir.display());
+                }
+                Err(message) => {
+                    eprintln!("{message}");
+                    std::process::exit(2);
+                }
+            }
+        }
+        "batch" => {
+            if args.len() != 3 {
+                eprintln!("usage: lifelog-compression batch <input-dir> <output-root>");
+                std::process::exit(2);
+            }
+            match extract_directory_to_dir(PathBuf::from(&args[1]), PathBuf::from(&args[2])) {
+                Ok(result) => {
+                    println!(
+                        "{}\nitems={}\nframes={}",
+                        result.output_root.display(),
+                        result.item_count,
+                        result.total_frame_count
+                    );
                 }
                 Err(message) => {
                     eprintln!("{message}");
