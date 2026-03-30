@@ -159,12 +159,10 @@ Potential manifest contents:
 - original file path
 - original source width / height
 - original aspect ratio
-- original source id
 - requested timestamp
 - actual timestamp
 - frame filename
 - extraction settings
-- frame byte size
 - width / height
 
 ## Current strongest hypothesis
@@ -184,7 +182,7 @@ The package surface should be Rust-first:
 
 - Rust crate for the public interface
 - Rust CLI for manual use and testing
-- platform-specific extraction backend hidden behind that interface
+- a small native macOS extractor hidden behind that interface
 
 This keeps the tool easy to embed in:
 
@@ -193,3 +191,13 @@ This keeps the tool easy to embed in:
 - other local tooling
 
 while still allowing the actual extraction backend to evolve.
+
+## Current implementation note
+
+The package currently avoids source and frame hashing on purpose.
+
+Reason:
+
+- hashes are not intrinsic media metadata
+- they materially slow the shipped end-to-end path
+- the embedding app can add them later if it actually needs them

@@ -112,13 +112,16 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=0, help="Optional frame limit; 0 means all frames.")
     args = parser.parse_args()
 
-    manifest_path = args.bundle_dir / "manifest.json"
+    manifest_path = args.bundle_dir / "manifest.jsonl"
     if not manifest_path.exists():
         print(json.dumps({"error": "missing_manifest", "path": str(manifest_path)}, indent=2))
         return 2
 
-    manifest = json.loads(manifest_path.read_text())
-    rows = manifest
+    rows = [
+        json.loads(line)
+        for line in manifest_path.read_text().splitlines()
+        if line.strip()
+    ]
     if args.limit > 0:
         rows = rows[: args.limit]
 
@@ -129,9 +132,10 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="lifelog-validate-") as tmpdir:
         tmpdir_path = Path(tmpdir)
         for row in rows:
-            extracted = args.bundle_dir / row["filename"]
-            reference = tmpdir_path / row["filename"]
-            ts = float(row["actualSeconds"])
+            frame_name = Path(row["frame_relpath"]).name
+            extracted = args.bundle_dir / row["frame_relpath"]
+            reference = tmpdir_path / frame_name
+            ts = float(row["actual_ts_ms"]) / 1000.0
             extract_reference_frame(args.source, ts, reference)
             psnr_value = psnr(reference, extracted)
             ssim_value = ssim(reference, extracted)
@@ -139,9 +143,9 @@ def main() -> int:
             ssim_values.append(ssim_value)
             per_frame.append(
                 {
-                    "filename": row["filename"],
-                    "requested_seconds": row["requestedSeconds"],
-                    "actual_seconds": row["actualSeconds"],
+                    "filename": frame_name,
+                    "requested_seconds": float(row["requested_ts_ms"]) / 1000.0,
+                    "actual_seconds": ts,
                     "psnr": psnr_value,
                     "ssim": ssim_value,
                 }

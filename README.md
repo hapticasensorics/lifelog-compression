@@ -1,10 +1,10 @@
 # lifelog-compression
 
-Experiments and technical notes for compressing lifelog-style visual data before upload.
+Opinionated sparse visual extraction for lifelog-style video before upload.
 
 The current goal is not to preserve smooth playback-quality video. The goal is to preserve useful visual information for downstream memory, search, coverage, and analysis workflows while making local preprocessing and upload much faster.
 
-This repo is becoming a reusable utility that can be embedded into or called from other programs before upload.
+This repo is a reusable utility that can be embedded into or called from other programs before upload.
 
 The tool is intentionally opinionated:
 
@@ -27,6 +27,23 @@ The strongest practical default found so far is:
 - store a manifest of requested timestamps and actual timestamps
 
 This preserves a regular sparse timeline while staying very fast on Apple Silicon.
+
+## Current package shape
+
+The public surface is intentionally tiny:
+
+- one input video file
+- one output bundle folder
+- one opinionated extraction recipe
+
+Commands:
+
+```bash
+cargo run -- spec
+cargo run -- extract /path/to/video.mp4 /path/to/output-bundle
+```
+
+On macOS, the Rust crate compiles and invokes a tiny native Swift helper built on `AVAssetImageGenerator`. Rust owns the package shape and bundle emission; the native helper owns the actual frame extraction.
 
 ## Main findings
 
@@ -157,14 +174,32 @@ Current recommendation:
 
 The embedding app or service can decide how to combine or upload many bundles, but that is outside the core tool itself.
 
+## Current implementation checks
+
+Closed-loop validation against source is now in the repo via:
+
+- `scripts/validate_against_source.py`
+
+Current native-package validation:
+
+- light clip fidelity:
+  - PSNR mean: `30.37 dB`
+  - SSIM mean: `0.9803`
+- heavy GoPro fidelity, first 30 frames:
+  - PSNR mean: `33.83 dB`
+  - SSIM mean: `0.9747`
+
+Current release-binary extraction timings:
+
+- light clip (`15s` source): `1.23s` wall time, about `12.2x realtime`
+- heavy GoPro clip (`112.7s` source): `5.44s` wall time, about `20.7x realtime`
+
 ## Future work
 
-- define the exact manifest format
-- define the local bundle layout
-- define the upload shard format
-- benchmark folder-scale extraction on large real datasets
-- test whether `720p` or `540p` is a better default than `1080p`
-- add optional proxy discovery rules for common camera ecosystems
+- add a small library API on top of the current CLI path
+- benchmark folder-scale extraction on larger real datasets
+- decide whether `1080p` should remain the default or whether `720p` is the better product choice
+- optionally add proxy discovery rules for common camera ecosystems
 
 ## Related notes
 
@@ -177,7 +212,7 @@ The first concrete interchange spec lives in [docs/visual-bundle-v1.md](docs/vis
 
 ## Package shape
 
-The repo now includes a Rust crate plus CLI:
+The repo includes a Rust crate plus CLI:
 
 ```bash
 cargo run -- spec
@@ -189,6 +224,4 @@ Current public commands are intentionally minimal:
 - `spec`
 - `help`
 
-The implementation is intentionally light right now; the technical findings and bundle spec are the first-class output so far.
-
-The long-term CLI should stay small rather than becoming highly configurable.
+The CLI should stay small rather than becoming highly configurable.

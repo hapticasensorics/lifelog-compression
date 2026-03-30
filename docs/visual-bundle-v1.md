@@ -15,7 +15,7 @@ It is also designed to be emitted by an opinionated tool with very little public
 - keep the format obvious and inspectable
 - avoid custom binary containers as the primary truth
 - support direct upload to object storage
-- preserve exact provenance back to the original source file
+- preserve clear provenance back to the original source file
 
 ## Non-goals
 
@@ -99,10 +99,9 @@ Example:
   },
   "source_video": {
     "source_relpath": "DCIM/100GOPRO/GX010046.MP4",
-    "content_hash": "sha256:...",
     "file_size_bytes": 1686181009,
     "container_format": "mp4",
-    "video_codec": "hevc",
+    "video_codec": "hvc1",
     "duration_ms": 112720,
     "width": 2704,
     "height": 2028,
@@ -136,7 +135,6 @@ Each line must describe:
 - actual timestamp
 - where the image lives
 - image dimensions
-- content hash
 
 Example line:
 
@@ -145,12 +143,10 @@ Example line:
   "frame_id": "frame_000001",
   "frame_relpath": "frames/00000001.jpg",
   "source_relpath": "DCIM/100GOPRO/GX010046.MP4",
-  "source_content_hash": "sha256:...",
   "requested_ts_ms": 1000,
   "actual_ts_ms": 1001,
   "width": 1920,
   "height": 1080,
-  "content_hash": "sha256:...",
   "extractor": "avasset-image-generator",
   "extractor_version": "0.1.0"
 }
@@ -167,11 +163,9 @@ Each manifest row must include:
 - `actual_ts_ms`
 - `width`
 - `height`
-- `content_hash`
 
 ## Recommended frame fields
 
-- `source_content_hash`
 - `extractor`
 - `extractor_version`
 - `source_width`
@@ -244,6 +238,8 @@ A consumer should only need:
 No video decoding should be required after the bundle is produced.
 
 Consumers should also be able to read the original video geometry and timing metadata directly from `bundle.json`.
+
+The format does not require hashing. If an embedding app wants bundle-level or source-level hashes, it should add them outside the core format.
 
 ## Compatibility rule
 
