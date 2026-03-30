@@ -56,77 +56,77 @@ pub struct ExtractResult {
     pub frame_count: usize,
 }
 
-#[derive(Debug, Serialize)]
-struct ProducerMetadata {
-    name: String,
-    version: String,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ProducerMetadata {
+    pub name: String,
+    pub version: String,
 }
 
-#[derive(Debug, Serialize)]
-struct SamplingMetadata {
-    requested_interval_ms: u32,
-    tolerance_before_ms: u32,
-    tolerance_after_ms: u32,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SamplingMetadata {
+    pub requested_interval_ms: u32,
+    pub tolerance_before_ms: u32,
+    pub tolerance_after_ms: u32,
 }
 
-#[derive(Debug, Serialize)]
-struct ImageMetadata {
-    format: String,
-    canvas_width: u32,
-    canvas_height: u32,
-    fit_mode: String,
-    padding: String,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ImageMetadata {
+    pub format: String,
+    pub canvas_width: u32,
+    pub canvas_height: u32,
+    pub fit_mode: String,
+    pub padding: String,
 }
 
-#[derive(Debug, Serialize)]
-struct SourceVideoMetadata {
-    source_relpath: String,
-    file_size_bytes: u64,
-    container_format: String,
-    video_codec: String,
-    duration_ms: u64,
-    width: u32,
-    height: u32,
-    display_width: u32,
-    display_height: u32,
-    aspect_ratio: f64,
-    avg_frame_rate: String,
-    rotation_degrees: i64,
-    creation_time: Option<String>,
-    timecode: Option<String>,
-    has_audio: bool,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SourceVideoMetadata {
+    pub source_relpath: String,
+    pub file_size_bytes: u64,
+    pub container_format: String,
+    pub video_codec: String,
+    pub duration_ms: u64,
+    pub width: u32,
+    pub height: u32,
+    pub display_width: u32,
+    pub display_height: u32,
+    pub aspect_ratio: f64,
+    pub avg_frame_rate: String,
+    pub rotation_degrees: i64,
+    pub creation_time: Option<String>,
+    pub timecode: Option<String>,
+    pub has_audio: bool,
 }
 
-#[derive(Debug, Serialize)]
-struct BundleMetadata {
-    format: String,
-    format_version: u32,
-    bundle_id: String,
-    created_at_unix_ms: u128,
-    producer: ProducerMetadata,
-    sampling: SamplingMetadata,
-    image: ImageMetadata,
-    source_video: SourceVideoMetadata,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BundleMetadata {
+    pub format: String,
+    pub format_version: u32,
+    pub bundle_id: String,
+    pub created_at_unix_ms: u128,
+    pub producer: ProducerMetadata,
+    pub sampling: SamplingMetadata,
+    pub image: ImageMetadata,
+    pub source_video: SourceVideoMetadata,
 }
 
-#[derive(Debug, Serialize)]
-struct ManifestRow {
-    frame_id: String,
-    frame_relpath: String,
-    source_relpath: String,
-    requested_ts_ms: u64,
-    actual_ts_ms: u64,
-    width: u32,
-    height: u32,
-    source_width: u32,
-    source_height: u32,
-    source_aspect_ratio: f64,
-    content_rect_x: u32,
-    content_rect_y: u32,
-    content_rect_width: u32,
-    content_rect_height: u32,
-    extractor: String,
-    extractor_version: String,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ManifestRow {
+    pub frame_id: String,
+    pub frame_relpath: String,
+    pub source_relpath: String,
+    pub requested_ts_ms: u64,
+    pub actual_ts_ms: u64,
+    pub width: u32,
+    pub height: u32,
+    pub source_width: u32,
+    pub source_height: u32,
+    pub source_aspect_ratio: f64,
+    pub content_rect_x: u32,
+    pub content_rect_y: u32,
+    pub content_rect_width: u32,
+    pub content_rect_height: u32,
+    pub extractor: String,
+    pub extractor_version: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -410,9 +410,48 @@ pub fn extract(request: &ExtractRequest) -> Result<ExtractResult, String> {
     })
 }
 
+pub fn extract_to_dir(
+    input: impl AsRef<Path>,
+    output_dir: impl AsRef<Path>,
+) -> Result<ExtractResult, String> {
+    let request = ExtractRequest::new(input, output_dir);
+    extract(&request)
+}
+
+pub fn load_bundle_metadata(bundle_dir: impl AsRef<Path>) -> Result<BundleMetadata, String> {
+    let path = bundle_dir.as_ref().join("bundle.json");
+    let text = fs::read_to_string(&path)
+        .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
+    serde_json::from_str(&text)
+        .map_err(|err| format!("failed to parse {}: {err}", path.display()))
+}
+
+pub fn load_manifest(bundle_dir: impl AsRef<Path>) -> Result<Vec<ManifestRow>, String> {
+    let path = bundle_dir.as_ref().join("manifest.jsonl");
+    let text = fs::read_to_string(&path)
+        .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
+    text.lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            serde_json::from_str::<ManifestRow>(line)
+                .map_err(|err| format!("failed to parse manifest row in {}: {err}", path.display()))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::content_rect;
+    use super::{BundleMetadata, ImageMetadata, ManifestRow, ProducerMetadata, SamplingMetadata, SourceVideoMetadata, content_rect, load_bundle_metadata, load_manifest};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        std::env::temp_dir().join(format!("lifelog-compression-{name}-{millis}"))
+    }
 
     #[test]
     fn content_rect_letterboxes_four_three_into_sixteen_nine() {
@@ -424,5 +463,94 @@ mod tests {
     fn content_rect_keeps_native_sixteen_nine_full_frame() {
         let rect = content_rect(1920, 1080, 1920, 1080);
         assert_eq!(rect, (0, 0, 1920, 1080));
+    }
+
+    #[test]
+    fn load_bundle_metadata_reads_bundle_json() {
+        let dir = temp_dir("bundle");
+        fs::create_dir_all(&dir).unwrap();
+        let bundle = BundleMetadata {
+            format: "visual-bundle".to_string(),
+            format_version: 1,
+            bundle_id: "vb_test".to_string(),
+            created_at_unix_ms: 1,
+            producer: ProducerMetadata {
+                name: "lifelog-compression".to_string(),
+                version: "0.1.0".to_string(),
+            },
+            sampling: SamplingMetadata {
+                requested_interval_ms: 1000,
+                tolerance_before_ms: 500,
+                tolerance_after_ms: 500,
+            },
+            image: ImageMetadata {
+                format: "jpeg".to_string(),
+                canvas_width: 1920,
+                canvas_height: 1080,
+                fit_mode: "contain".to_string(),
+                padding: "black".to_string(),
+            },
+            source_video: SourceVideoMetadata {
+                source_relpath: "clip.mp4".to_string(),
+                file_size_bytes: 123,
+                container_format: "mp4".to_string(),
+                video_codec: "hvc1".to_string(),
+                duration_ms: 1000,
+                width: 1920,
+                height: 1080,
+                display_width: 1920,
+                display_height: 1080,
+                aspect_ratio: 16.0 / 9.0,
+                avg_frame_rate: "24.000".to_string(),
+                rotation_degrees: 0,
+                creation_time: None,
+                timecode: None,
+                has_audio: true,
+            },
+        };
+        fs::write(
+            dir.join("bundle.json"),
+            serde_json::to_string_pretty(&bundle).unwrap(),
+        )
+        .unwrap();
+
+        let loaded = load_bundle_metadata(&dir).unwrap();
+        assert_eq!(loaded, bundle);
+
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn load_manifest_reads_jsonl_rows() {
+        let dir = temp_dir("manifest");
+        fs::create_dir_all(&dir).unwrap();
+        let row = ManifestRow {
+            frame_id: "frame_00000001".to_string(),
+            frame_relpath: "frames/00000001.jpg".to_string(),
+            source_relpath: "clip.mp4".to_string(),
+            requested_ts_ms: 0,
+            actual_ts_ms: 0,
+            width: 1920,
+            height: 1080,
+            source_width: 1920,
+            source_height: 1080,
+            source_aspect_ratio: 16.0 / 9.0,
+            content_rect_x: 0,
+            content_rect_y: 0,
+            content_rect_width: 1920,
+            content_rect_height: 1080,
+            extractor: "avasset-image-generator".to_string(),
+            extractor_version: "0.1.0".to_string(),
+        };
+        fs::write(
+            dir.join("manifest.jsonl"),
+            format!("{}\n", serde_json::to_string(&row).unwrap()),
+        )
+        .unwrap();
+
+        let loaded = load_manifest(&dir).unwrap();
+        assert_eq!(loaded, vec![row]);
+
+        fs::remove_dir_all(dir).unwrap();
     }
 }
