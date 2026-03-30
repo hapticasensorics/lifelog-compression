@@ -8,12 +8,13 @@ It is designed for workflows like Guardian where:
 - the goal is to preserve useful visual information, not smooth playback
 - the output should be easy for other programs to consume without special codec knowledge
 
+It is also designed to be emitted by an opinionated tool with very little public configuration.
+
 ## Goals
 
 - keep the format obvious and inspectable
 - avoid custom binary containers as the primary truth
 - support direct upload to object storage
-- support sharding for large imports
 - preserve exact provenance back to the original source file
 
 ## Non-goals
@@ -34,6 +35,14 @@ visual-bundle/
     00000003.jpg
     ...
 ```
+
+This format is intentionally scoped to one input video file per bundle.
+
+That means:
+
+- one input video
+- one output bundle
+- one natural upload unit
 
 The canonical truth is:
 
@@ -87,9 +96,33 @@ Example:
     "source_id": "source_...",
     "owned_source_id": "owned_source_...",
     "source_type_slug": "gopro"
+  },
+  "source_video": {
+    "source_relpath": "DCIM/100GOPRO/GX010046.MP4",
+    "content_hash": "sha256:...",
+    "file_size_bytes": 1686181009,
+    "container_format": "mp4",
+    "video_codec": "hevc",
+    "duration_ms": 112720,
+    "width": 2704,
+    "height": 2028,
+    "display_width": 2704,
+    "display_height": 2028,
+    "aspect_ratio": 1.333333,
+    "avg_frame_rate": "120000/1001",
+    "rotation_degrees": 0,
+    "creation_time": "2026-02-05T05:08:39Z",
+    "timecode": "21:07:23:023",
+    "has_audio": true
   }
 }
 ```
+
+The `source_video` block is for metadata intrinsic to the input media file itself.
+
+That is in scope for the tool.
+
+External sidecars and package-level vendor artifacts are intentionally out of scope for the core format.
 
 ## `manifest.jsonl`
 
@@ -141,6 +174,9 @@ Each manifest row must include:
 - `source_content_hash`
 - `extractor`
 - `extractor_version`
+- `source_width`
+- `source_height`
+- `source_aspect_ratio`
 - `content_rect_x`
 - `content_rect_y`
 - `content_rect_width`
@@ -180,35 +216,22 @@ Local bundle layout and upload transport are separate concerns.
 
 Recommended transport:
 
-- `tar` shards
+- a single tar archive of the bundle, if packaging is needed
 
-Each shard should contain the same ordinary files:
+Example:
 
 ```text
-shard-0001.tar
+visual-bundle.tar
   bundle.json
   manifest.jsonl
   frames/...
 ```
 
-In practice, large imports may split the bundle across multiple shards. In that case:
+Because one input video maps to one bundle, the bundle naturally maps to one upload unit.
 
-- each shard must contain a shard-local `manifest.jsonl`
-- the union of all shard manifests defines the logical bundle
+The tool itself should not expose sharding as a public option.
 
-## Sharding guidance
-
-Recommended shard target:
-
-- `128 MB` to `256 MB`
-
-Reasons:
-
-- large enough to avoid too many tiny uploads
-- small enough to retry cheaply
-- works well for direct object-store upload
-
-JPEGs are already compressed, so the tar archive should usually remain uncompressed.
+If a higher-level embedding system wants to split or aggregate multiple bundles later, that is outside the core tool boundary.
 
 ## Consumer contract
 
@@ -219,6 +242,8 @@ A consumer should only need:
 3. JPEG decoding
 
 No video decoding should be required after the bundle is produced.
+
+Consumers should also be able to read the original video geometry and timing metadata directly from `bundle.json`.
 
 ## Compatibility rule
 
@@ -237,4 +262,20 @@ For now, a producer should emit:
 - `+/- 0.5s` tolerance
 - `bundle.json`
 - `manifest.jsonl`
-- tar shards for upload
+- a single tar archive if upload packaging is needed
+
+## Tool opinionation
+
+This tool should stay intentionally opinionated.
+
+It should have very few public configuration options.
+
+Good fixed defaults:
+
+- `1 fps`
+- padded `1920x1080`
+- JPEG
+- `+/- 0.5s`
+- one input video -> one output bundle
+
+The more advanced orchestration concerns should live in the caller, not in this tool.

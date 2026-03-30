@@ -77,6 +77,24 @@ not:
 
 - repeated shelling out to `swift` script mode
 
+## Intrinsic metadata boundary
+
+The tool should preserve metadata intrinsic to the input video file, for example:
+
+- original width and height
+- original display aspect ratio
+- frame rate
+- codec
+- duration
+- rotation / transform
+- creation time if present
+- timecode if present
+- audio presence
+
+That is the right scope for a reusable extraction utility.
+
+External companion files and vendor package metadata should be handled by the caller if needed.
+
 ## Tolerance findings
 
 ### Symmetric `+/-0.5s`
@@ -134,11 +152,13 @@ Likely output bundle:
 
 Potential upload packaging:
 
-- tar shards
+- one tar per bundle
 
 Potential manifest contents:
 
 - original file path
+- original source width / height
+- original aspect ratio
 - original source id
 - requested timestamp
 - actual timestamp
@@ -156,4 +176,20 @@ The best near-term system is:
 - `1920x1080` padded JPEGs
 - `+/-0.5s` tolerance
 - optional proxy acceleration
-- manifest-based upload
+- one-video-per-bundle manifest-based upload
+
+## Packaging direction
+
+The package surface should be Rust-first:
+
+- Rust crate for the public interface
+- Rust CLI for manual use and testing
+- platform-specific extraction backend hidden behind that interface
+
+This keeps the tool easy to embed in:
+
+- desktop apps
+- backend jobs
+- other local tooling
+
+while still allowing the actual extraction backend to evolve.

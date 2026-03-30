@@ -4,7 +4,14 @@ Experiments and technical notes for compressing lifelog-style visual data before
 
 The current goal is not to preserve smooth playback-quality video. The goal is to preserve useful visual information for downstream memory, search, coverage, and analysis workflows while making local preprocessing and upload much faster.
 
-This repo is becoming a reusable macOS-native utility that can be embedded into or called from other programs before upload.
+This repo is becoming a reusable utility that can be embedded into or called from other programs before upload.
+
+The tool is intentionally opinionated:
+
+- one input video file
+- one output visual bundle
+- preserve intrinsic media metadata from that video
+- very few public knobs
 
 ## Current default recipe
 
@@ -148,6 +155,8 @@ Current recommendation:
    - manifest with requested and actual timestamps
 5. Upload the sparse visual bundle rather than a recompressed video derivative.
 
+The embedding app or service can decide how to combine or upload many bundles, but that is outside the core tool itself.
+
 ## Future work
 
 - define the exact manifest format
@@ -168,17 +177,18 @@ The first concrete interchange spec lives in [docs/visual-bundle-v1.md](docs/vis
 
 ## Package shape
 
-The repo now includes a Swift package with an executable target:
+The repo now includes a Rust crate plus CLI:
 
 ```bash
-swift run lifelog-compression
+cargo run -- spec
 ```
 
-Current commands are scaffolds:
+Current public commands are intentionally minimal:
 
 - `extract`
-- `benchmark`
-- `inspect-proxies`
 - `spec`
+- `help`
 
 The implementation is intentionally light right now; the technical findings and bundle spec are the first-class output so far.
+
+The long-term CLI should stay small rather than becoming highly configurable.

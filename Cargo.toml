@@ -1,0 +1,14 @@
+[package]
+name = "lifelog-compression"
+version = "0.1.0"
+edition = "2024"
+description = "Opinionated sparse visual extraction for lifelog-style video"
+license = "MIT"
+
+[lib]
+name = "lifelog_compression"
+path = "src/lib.rs"
+
+[[bin]]
+name = "lifelog-compression"
+path = "src/main.rs"
